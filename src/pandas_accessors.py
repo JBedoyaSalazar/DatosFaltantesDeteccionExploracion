@@ -3,6 +3,8 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import pandas as pd
 import numpy as np
+import upsetplot
+import missingno as msno
 
 
 @pd.api.extensions.register_dataframe_accessor("missing")
@@ -81,7 +83,7 @@ class MissingMethods:
             )
             .drop(columns=["n_in_span"])
             .reset_index()
-            .sort_values("pct_complete", ascending=False)
+            .sort_values("span_counter")
         )
 
     def missing_variable_run(self, variable: str) -> pd.DataFrame:
@@ -209,13 +211,26 @@ class MissingMethods:
         plt.margins(0)
         plt.tight_layout(pad=0)
 
-    def missing_upsetplot(self, variables: list[str] = None, **kwargs):
-
+    def missing_matrix_plot(self, variables: list[str] = None, figsize=(12, 6)):
         if variables is None:
-            variables = self._obj.columns.tolist()
+            variables = [c for c in self._obj.columns if self._obj[c].isnull().sum() > 0]
+        else:
+            variables = [c for c in variables if c in self._obj.columns]
 
-        return (
-            self._obj.isna()
-            .value_counts(variables)
-            .pipe(lambda df: upsetplot.plot(df, **kwargs))
+        msno.matrix(
+            self._obj[variables],
+            figsize=figsize,
+            sparkline=False,
+            color=(0.2, 0.2, 0.2)
         )
+        plt.show()
+
+    def missing_heatmap_plot(self, variables: list[str] = None, figsize=(10, 6)):
+        if variables is None:
+            variables = [c for c in self._obj.columns if self._obj[c].isnull().sum() > 0]
+
+        msno.heatmap(
+            self._obj[variables],
+            figsize=figsize
+        )
+        plt.show()
