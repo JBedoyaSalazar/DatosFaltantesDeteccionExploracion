@@ -1,4 +1,8 @@
+import itertools
+import seaborn as sns
+import matplotlib.pyplot as plt
 import pandas as pd
+import numpy as np
 
 
 @pd.api.extensions.register_dataframe_accessor("missing")
@@ -39,30 +43,32 @@ class MissingMethods:
             self._obj.missing.missing_variable_summary()
             .value_counts("n_missing")
             .reset_index()
-            .rename(columns={"n_missing": "n_missing_in_variable", 0: "n_variables"})
+            .rename(columns={
+                "n_missing": "n_missing_in_variable", 
+                "count": "n_variables"
+            })
             .assign(
                 pct_variables=lambda df: df.n_variables / df.n_variables.sum() * 100
             )
-            .sort_values("pct_variables", ascending=False)
+            .sort_values("n_missing_in_variable", ascending=True)
         )
 
-    def missing_case_table(self) -> pd.DataFrame():
+    def missing_case_table(self) -> pd.DataFrame:
         return (
             self._obj.missing.missing_case_summary()
             .value_counts("n_missing")
             .reset_index()
-            .rename(columns={"n_missing": "n_missing_in_case", 0: "n_cases"})
+            .rename(columns={
+                "n_missing": "n_missing_in_case", 
+                "count": "n_cases"
+            })
             .assign(pct_case=lambda df: df.n_cases / df.n_cases.sum() * 100)
-            .sort_values("pct_case", ascending=False)
+            .sort_values("n_missing_in_case", ascending=True)
         )
 
     def missing_variable_span(self, variable: str, span_every: int) -> pd.DataFrame:
         return (
-            self._obj.assign(
-                span_counter=lambda df: (
-                    np.repeat(a=range(df.shape[0]), repeats=span_every)[: df.shape[0]]
-                )
-            )
+            self._obj.assign(span_counter=lambda df: np.arange(len(df)) // span_every)
             .groupby("span_counter")
             .aggregate(
                 n_in_span=(variable, "size"),
@@ -75,15 +81,23 @@ class MissingMethods:
             )
             .drop(columns=["n_in_span"])
             .reset_index()
+            .sort_values("pct_complete", ascending=False)
         )
 
-    def missing_variable_run(self, variable) -> pd.DataFrame:
+    def missing_variable_run(self, variable: str) -> pd.DataFrame:
         rle_list = self._obj[variable].pipe(
-            lambda s: [[len(list(g)), k] for k, g in itertools.groupby(s.isnull())]
+            lambda s: [
+                [len(list(g)), k] for k, g in itertools.groupby(s.isnull())
+            ]
         )
 
-        return pd.DataFrame(data=rle_list, columns=["run_length", "is_na"]).replace(
-            {False: "complete", True: "missing"}
+        return (
+            pd.DataFrame(data=rle_list, columns=["run_length", "is_na"])
+            .assign(
+                is_na=lambda df: df["is_na"].map(
+                    {False: "complete", True: "missing"}
+                )
+            )
         )
 
     def sort_variables_by_missingness(self, ascending = False):
